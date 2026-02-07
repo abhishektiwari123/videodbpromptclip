@@ -22,14 +22,25 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-try:
-    from llm_agent import LLM, LLMType, Models
+# Lazy import: llm_agent has heavy transitive deps (google-generativeai, cryptography)
+# that can crash in some environments. We only import when LLM mode is actually used.
+LLM = None
+LLMType = None
+Models = None
+_LLM_AVAILABLE = False
+
+
+def _ensure_llm_imports():
+    """Import llm_agent on first use. Returns True if successful."""
+    global LLM, LLMType, Models, _LLM_AVAILABLE
+    if _LLM_AVAILABLE:
+        return True
+    from llm_agent import LLM as _LLM, LLMType as _LLMType, Models as _Models
+    LLM = _LLM
+    LLMType = _LLMType
+    Models = _Models
     _LLM_AVAILABLE = True
-except ImportError:
-    _LLM_AVAILABLE = False
-    LLM = None
-    LLMType = None
-    Models = None
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -277,17 +288,13 @@ class GhibliPromptGenerator:
         storyboard.print_storyboard()
     """
 
-    def __init__(self, llm: Optional[LLM] = None):
+    def __init__(self, llm=None):
         self.llm = llm
 
     def _get_llm(self):
         if self.llm:
             return self.llm
-        if not _LLM_AVAILABLE:
-            raise RuntimeError(
-                "LLM dependencies not installed. Use use_llm=False for template mode, "
-                "or install dependencies: pip install -r requirements.txt"
-            )
+        _ensure_llm_imports()
         return LLM(llm_type=LLMType.OPENAI, model=Models.GPT4o)
 
     # ----- LLM-powered scene generation -----
