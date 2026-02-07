@@ -295,7 +295,7 @@ class GhibliPromptGenerator:
         if self.llm:
             return self.llm
         _ensure_llm_imports()
-        return LLM(llm_type=LLMType.OPENAI, model=Models.GPT4o)
+        return LLM(llm_type=LLMType.CLAUDE, model=Models.CLAUDE_SONNET)
 
     # ----- LLM-powered scene generation -----
 

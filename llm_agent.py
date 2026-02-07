@@ -6,8 +6,6 @@ import json
 import os
 
 import requests
-from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
-import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,6 +27,9 @@ class Models:
     GPT4o_new = "gpt-4o-2024-08-06"
     CLAUDE_INSTANT = "claude-instant-1.1"
     CLAUDE2 = "claude-2"
+    CLAUDE_SONNET = "claude-sonnet-4-5-20250929"
+    CLAUDE_HAIKU = "claude-haiku-4-5-20251001"
+    CLAUDE_OPUS = "claude-opus-4-6"
     GEMINI_1_5_FLASH = "gemini-1.5-flash"
     GEMINI_1_5_PRO = "gemini-1.5-pro"
     OA_MODELS_WITH_RESPONSE_TYPE_SUPPORT = [GPT4o, GPT4o_new]
@@ -93,21 +94,21 @@ class LLM:
             return {"error": "Failed to decode JSON response."}
 
     def _call_claude(self, message):
+        from anthropic import Anthropic
         anthropic = Anthropic(api_key=self.claude_key)
-        prompt = f"{HUMAN_PROMPT} {message} {AI_PROMPT}"
         try:
-            completion = anthropic.completions.create(
+            response = anthropic.messages.create(
                 model=self.model,
-                max_tokens_to_sample=80000,
-                prompt=prompt,
+                max_tokens=8192,
+                messages=[{"role": "user", "content": str(message)}],
             )
-            return {"response": completion.completion}
-        except (
-            Exception
-        ) as e:  # Consider a more specific exception based on the Anthropic SDK
+            text = response.content[0].text
+            return {"response": text}
+        except Exception as e:
             return {"error": str(e)}
 
     def _call_gemini(self, message):
+        import google.generativeai as genai
         genai.configure(api_key=GEMINI_KEY)
         model = genai.GenerativeModel(self.model)
         try:
