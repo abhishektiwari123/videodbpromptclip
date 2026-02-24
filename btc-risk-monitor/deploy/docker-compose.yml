@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  btc-risk-monitor:
+    build: ..
+    container_name: btc-risk-monitor
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+      - ../.env:/app/.env
+      - ../src/config/macro-calendar.json:/app/src/config/macro-calendar.json
+      - ../src/config/support-levels.json:/app/src/config/support-levels.json
+    environment:
+      - NODE_ENV=production
