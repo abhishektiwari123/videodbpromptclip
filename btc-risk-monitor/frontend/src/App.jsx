@@ -5,6 +5,7 @@ import PriceChart from './components/PriceChart';
 import ScoreHistory from './components/ScoreHistory';
 import MacroCalendar from './components/MacroCalendar';
 import NewsFeed from './components/NewsFeed';
+import BacktestResults from './components/BacktestResults';
 import { getStatus, getScoreHistory, getPriceHistory, getCalendar, getNews, forceCalculate } from './api';
 
 function App() {
@@ -123,6 +124,9 @@ function App() {
           <MacroCalendar events={calendar} />
           <NewsFeed news={news} />
         </div>
+
+        {/* Backtest Section */}
+        <BacktestResults />
       </main>
 
       <footer className="text-center text-gray-600 text-xs py-4 border-t border-gray-900">

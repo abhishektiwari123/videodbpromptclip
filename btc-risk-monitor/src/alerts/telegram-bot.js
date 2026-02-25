@@ -5,6 +5,7 @@ const coingecko = require('../data/coingecko');
 const etfFlows = require('../data/etf-flows');
 const macroEvents = require('../data/macro-events');
 const db = require('../db/sqlite');
+const backtestEngine = require('../scoring/backtest');
 
 let bot = null;
 let chatId = null;
@@ -162,6 +163,27 @@ function registerCommands() {
     }
   });
 
+  // /backtest — Run backtest on historical trades
+  bot.onText(/\/backtest/, async (msg) => {
+    if (!isAuthorized(msg)) return;
+    try {
+      await bot.sendMessage(msg.chat.id, '\u23F3 Running backtest on historical trade data... This may take a moment.');
+      const result = await backtestEngine.runBacktest();
+      const text = formatBacktest(result);
+      // Split into multiple messages if too long
+      if (text.length > 4000) {
+        const mid = text.lastIndexOf('\n', 4000);
+        await bot.sendMessage(msg.chat.id, text.substring(0, mid), { parse_mode: 'HTML' });
+        await bot.sendMessage(msg.chat.id, text.substring(mid), { parse_mode: 'HTML' });
+      } else {
+        await bot.sendMessage(msg.chat.id, text, { parse_mode: 'HTML' });
+      }
+    } catch (err) {
+      logger.error('Telegram /backtest error', { error: err.message });
+      await bot.sendMessage(msg.chat.id, `\u274C Backtest failed: ${err.message}`);
+    }
+  });
+
   // /help
   bot.onText(/\/help|\/start/, async (msg) => {
     if (!isAuthorized(msg)) return;
@@ -174,7 +196,8 @@ function registerCommands() {
       `/support &lt;prices&gt; - Update support levels\n` +
       `/alert - Toggle alerts on/off\n` +
       `/force - Force recalculation now\n` +
-      `/override &lt;signal&gt; - Manual override (RED/ORANGE/YELLOW/GREEN/none)`;
+      `/override &lt;signal&gt; - Manual override (RED/ORANGE/YELLOW/GREEN/none)\n` +
+      `/backtest - Run backtest on historical trades`;
     await bot.sendMessage(msg.chat.id, text, { parse_mode: 'HTML' });
   });
 }
@@ -305,6 +328,60 @@ function formatHistory(scores) {
     };
     const emoji = signalEmoji[latest.signal] || '\u26AA';
     text += `${emoji} ${date}: <b>${latest.total_score}/70</b> ${latest.signal}\n`;
+  }
+
+  return text;
+}
+
+function formatBacktest(result) {
+  const { analytics } = result;
+  const a = analytics;
+  const s = a.scenarios;
+
+  const signalEmoji = { GREEN: '\u{1F7E2}', YELLOW: '\u{1F7E1}', ORANGE: '\u{1F7E0}', RED: '\u{1F534}' };
+
+  let text = `<b>\u{1F4CA} BACKTEST RESULTS</b>\n`;
+  text += `<i>${a.totalDays} trading days analyzed (Oct 2025 - Jan 2026)</i>\n\n`;
+
+  // Overall stats
+  text += `<b>Overall Performance:</b>\n`;
+  text += `Total P&L: <b>$${a.totalPnl}</b>\n`;
+  text += `Win Rate: ${a.winRate}% (${a.wins}W / ${a.losses}L / ${a.breakevens}BE)\n`;
+  text += `Avg Win: +$${a.avgWin} | Avg Loss: $${a.avgLoss}\n\n`;
+
+  // Risk score correlation
+  text += `<b>Risk Score Correlation:</b>\n`;
+  text += `Avg score on WIN days: ${a.avgScoreWin}/70\n`;
+  text += `Avg score on LOSS days: ${a.avgScoreLoss}/70\n\n`;
+
+  // Signal breakdown
+  text += `<b>Performance by Signal:</b>\n`;
+  for (const [signal, data] of Object.entries(a.signalAnalysis)) {
+    if (data.count === 0) continue;
+    const emoji = signalEmoji[signal] || '\u26AA';
+    text += `${emoji} ${signal}: ${data.count} days, ${data.winRate}% win, P&L: $${data.totalPnl} (avg $${data.avgPnl})\n`;
+  }
+
+  // Scenario analysis
+  text += `\n<b>\u{1F4A1} What-If Scenarios:</b>\n`;
+  text += `\u{1F4B0} All days: $${s.actual.pnl} (${s.actual.days} days, ${s.actual.winRate}% WR)\n`;
+  text += `\u{1F7E2}\u{1F7E1} GREEN+YELLOW only: $${s.greenYellowOnly.pnl} (${s.greenYellowOnly.days} days, ${s.greenYellowOnly.winRate}% WR)\n`;
+  text += `   Skipped ${s.greenYellowOnly.skippedDays} days (avoided $${s.greenYellowOnly.skippedPnl} P&L)\n`;
+  text += `\u{1F7E2} GREEN only: $${s.greenOnly.pnl} (${s.greenOnly.days} days, ${s.greenOnly.winRate}% WR)\n`;
+
+  // Biggest losses
+  if (a.biggestLossDays.length > 0) {
+    text += `\n<b>Biggest Loss Days:</b>\n`;
+    for (const d of a.biggestLossDays) {
+      const emoji = signalEmoji[d.signal] || '\u26AA';
+      text += `${emoji} ${d.date}: $${d.pnl} (Score: ${d.riskScore}, F&G: ${d.fgi})\n`;
+    }
+  }
+
+  // Monthly breakdown
+  text += `\n<b>Monthly Breakdown:</b>\n`;
+  for (const [month, data] of Object.entries(a.monthly)) {
+    text += `${month}: P&L $${data.totalPnl}, WR ${data.winRate}%, Avg Score ${data.avgScore}\n`;
   }
 
   return text;

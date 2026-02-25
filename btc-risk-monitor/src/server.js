@@ -14,6 +14,7 @@ const macroEvents = require('./data/macro-events');
 const newsScanner = require('./data/news-scanner');
 const telegramBot = require('./alerts/telegram-bot');
 const cronJobs = require('./scheduler/cron-jobs');
+const backtest = require('./scoring/backtest');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -193,6 +194,17 @@ app.post('/api/override', (req, res) => {
     }
   } catch (err) {
     res.status(500).json({ error: 'Failed to set override' });
+  }
+});
+
+// GET /api/backtest — Run backtest on historical trade data
+app.get('/api/backtest', async (req, res) => {
+  try {
+    const result = await backtest.runBacktest();
+    res.json(result);
+  } catch (err) {
+    logger.error('API /backtest error', { error: err.message });
+    res.status(500).json({ error: 'Backtest failed: ' + err.message });
   }
 });
 
